@@ -60,18 +60,42 @@ def hls_to_rgb(image):
     l: torch.Tensor = image[..., 1, :, :]
     s: torch.Tensor = image[..., 2, :, :]
 
-    kr = (0 + h / 30) % 12
-    kg = (8 + h / 30) % 12
-    kb = (4 + h / 30) % 12
-    a = s * torch.min(l, 1 - l)
+    p2 = torch.where(l <= 0.5, l * (1 + s), l * (1 - s) + s)
+    p1 = 2 * l - p2
+    h *= 6 / 360
+    h %= 6
 
-    ones_k = torch.ones_like(kr)
+    sector = torch.floor(h)
+    h -= sector
+    sector = sector.long()
 
-    fr = l - a * torch.max(torch.min(torch.min(kr - 3, 9 - kr), ones_k), -1 * ones_k)
-    fg = l - a * torch.max(torch.min(torch.min(kg - 3, 9 - kg), ones_k), -1 * ones_k)
-    fb = l - a * torch.max(torch.min(torch.min(kb - 3, 9 - kb), ones_k), -1 * ones_k)
+    sector_data = torch.tensor([[1, 3, 0], [1, 0, 2], [3, 0, 1], [0, 2, 1], [0, 1, 3], [2, 1, 0]])
 
-    out: torch.Tensor = torch.stack([fr, fg, fb], dim=-3)
+    tab = torch.empty((4, ) + image.shape[-2:])
+    tab[0] = p2
+    tab[1] = p1
+    tab[2] = p1 + (p2 - p1) * (1 - h)
+    tab[3] = p1 + (p2 - p1) * h
+
+    b = tab[sector_data[sector][..., 0]]
+    g = tab[sector_data[sector][..., 1]]
+    r = tab[sector_data[sector][..., 2]]
+
+    # kr = (0 + h / 30) % 12
+    # kg = (8 + h / 30) % 12
+    # kb = (4 + h / 30) % 12
+    # a = s * torch.min(l, 1 - l)
+    #
+    # ones_k = torch.ones_like(kr)
+    #
+    # fr = l - a * torch.max(torch.min(torch.min(kr - 3, 9 - kr), ones_k), -1 * ones_k)
+    # fg = l - a * torch.max(torch.min(torch.min(kg - 3, 9 - kg), ones_k), -1 * ones_k)
+    # fb = l - a * torch.max(torch.min(torch.min(kb - 3, 9 - kb), ones_k), -1 * ones_k)
+    #
+    # out: torch.Tensor = torch.stack([fr, fg, fb], dim=-3)
+
+    out = torch.stack([r, g, b])
+    out = torch.where(s == 0, l, out)
 
     return out
 
